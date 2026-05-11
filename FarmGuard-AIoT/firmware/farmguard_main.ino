@@ -82,7 +82,6 @@ void setup() {
     Serial.println("\n========================================");
     Serial.println("  FarmGuard-AIoT Firmware v1.0");
     Serial.println("  Smart Irrigation & Microclimate");
-    Serial.println("  Research Methodology in Computing");
     Serial.println("========================================\n");
 
     // Initialize pins
