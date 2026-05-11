@@ -2,7 +2,6 @@
  * FarmGuard-AIoT Firmware
  * Smart Irrigation & Microclimate Monitoring System
  * Target: ESP32 with FreeRTOS
- * Research Methodology in Computing - BCT 2315 / BCT 2402
  */
 
 #include <WiFi.h>

@@ -2,7 +2,6 @@
 """
 FarmGuard-AIoT Dashboard
 Smart Irrigation & Microclimate Monitoring System
-Research Methodology in Computing - BCT 2315 / BCT 2402
 """
 
 from flask import Flask, render_template, jsonify, request
