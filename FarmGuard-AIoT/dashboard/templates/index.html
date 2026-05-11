@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FarmGuard-AIoT | Smart Irrigation & Microclimate Monitoring</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #2d6a4f;
+            --primary-light: #40916c;
+            --secondary: #74c69d;
+            --accent: #d8f3dc;
+            --warning: #e9c46a;
+            --critical: #e76f51;
+            --info: #457b9d;
+            --bg: #f8f9fa;
+            --card-bg: #ffffff;
+            --text: #1d3557;
+            --text-light: #6c757d;
+            --border: #dee2e6;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: white;
+            padding: 1.5rem 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: white;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .logo-text h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .logo-text p {
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(255,255,255,0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #2ecc71;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Main Container */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            border-left: 4px solid var(--primary);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .stat-card.warning { border-left-color: var(--warning); }
+        .stat-card.critical { border-left-color: var(--critical); }
+        .stat-card.info { border-left-color: var(--info); }
+
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--text-light);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        .stat-icon {
+            font-size: 1.5rem;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-unit {
+            font-size: 0.875rem;
+            color: var(--text-light);
+        }
+
+        .stat-trend {
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .trend-up { color: var(--critical); }
+        .trend-down { color: var(--primary-light); }
+
+        /* Dashboard Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 1024px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .panel-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .panel-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-light);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        .btn-outline:hover {
+            background: var(--bg);
+        }
+
+        .btn-critical {
+            background: var(--critical);
+            color: white;
+        }
+
+        .btn-critical:hover {
+            background: #d65a3e;
+        }
+
+        /* Sensor Cards */
+        .sensor-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .sensor-card {
+            background: linear-gradient(135deg, var(--accent) 0%, white 100%);
+            border-radius: 10px;
+            padding: 1.25rem;
+            border: 1px solid var(--border);
+        }
+
+        .sensor-name {
+            font-size: 0.875rem;
+            color: var(--text-light);
+            margin-bottom: 0.5rem;
+        }
+
+        .sensor-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .sensor-unit {
+            font-size: 0.875rem;
+            color: var(--text-light);
+        }
+
+        .sensor-status {
+            margin-top: 0.75rem;
+            font-size: 0.8rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        .status-normal {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-critical {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        /* Chart Container */
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 1rem;
+        }
+
+        /* Alerts Panel */
+        .alerts-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .alert-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+            border-left: 3px solid;
+        }
+
+        .alert-item.warning {
+            background: #fffbeb;
+            border-left-color: var(--warning);
+        }
+
+        .alert-item.critical {
+            background: #fef2f2;
+            border-left-color: var(--critical);
+        }
+
+        .alert-item.info {
+            background: #eff6ff;
+            border-left-color: var(--info);
+        }
+
+        .alert-icon {
+            font-size: 1.25rem;
+            flex-shrink: 0;
+        }
+
+        .alert-content {
+            flex: 1;
+        }
+
+        .alert-title {
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .alert-message {
+            font-size: 0.85rem;
+            color: var(--text-light);
+        }
+
+        .alert-time {
+            font-size: 0.75rem;
+            color: var(--text-light);
+            margin-top: 0.25rem;
+        }
+
+        /* Irrigation Control */
+        .irrigation-control {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            margin-bottom: 2rem;
+        }
+
+        .control-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .control-card {
+            background: var(--bg);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .control-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .control-label {
+            font-size: 0.875rem;
+            color: var(--text-light);
+            margin-top: 0.25rem;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-light);
+            font-size: 0.875rem;
+            border-top: 1px solid var(--border);
+            margin-top: 2rem;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            .stats-grid { grid-template-columns: 1fr; }
+            .sensor-grid { grid-template-columns: 1fr; }
+            .header-content { flex-direction: column; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">🌱</div>
+                <div class="logo-text">
+                    <h1>FarmGuard-AIoT</h1>
+                    <p>Smart Irrigation & Microclimate Monitoring System</p>
+                </div>
+            </div>
+            <div class="status-badge">
+                <span class="status-dot"></span>
+                <span id="connection-status">System Online</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Statistics Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-header">
+                    <span class="stat-label">Avg Temperature</span>
+                    <span class="stat-icon">🌡️</span>
+                </div>
+                <div class="stat-value" id="avg-temp">--</div>
+                <div class="stat-unit">°C (24h)</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-header">
+                    <span class="stat-label">Avg Humidity</span>
+                    <span class="stat-icon">💧</span>
+                </div>
+                <div class="stat-value" id="avg-humidity">--</div>
+                <div class="stat-unit">% (24h)</div>
+            </div>
+
+            <div class="stat-card warning">
+                <div class="stat-header">
+                    <span class="stat-label">Soil Moisture</span>
+                    <span class="stat-icon">🌾</span>
+                </div>
+                <div class="stat-value" id="avg-soil">--</div>
+                <div class="stat-unit">% (24h avg)</div>
+            </div>
+
+            <div class="stat-card info">
+                <div class="stat-header">
+                    <span class="stat-label">Active Alerts</span>
+                    <span class="stat-icon">🔔</span>
+                </div>
+                <div class="stat-value" id="alert-count">--</div>
+                <div class="stat-unit">unacknowledged</div>
+            </div>
+        </div>
+
+        <!-- Current Sensor Readings -->
+        <div class="panel" style="margin-bottom: 1.5rem;">
+            <div class="panel-header">
+                <div class="panel-title">
+                    📊 Live Sensor Readings
+                </div>
+                <div class="panel-actions">
+                    <span id="last-update" style="font-size: 0.85rem; color: var(--text-light);">Updating...</span>
+                </div>
+            </div>
+
+            <div class="sensor-grid">
+                <div class="sensor-card">
+                    <div class="sensor-name">Temperature</div>
+                    <div class="sensor-value" id="current-temp">--</div>
+                    <div class="sensor-unit">°C</div>
+                    <span class="sensor-status status-normal" id="temp-status">Normal</span>
+                </div>
+
+                <div class="sensor-card">
+                    <div class="sensor-name">Humidity</div>
+                    <div class="sensor-value" id="current-humidity">--</div>
+                    <div class="sensor-unit">% RH</div>
+                    <span class="sensor-status status-normal" id="humidity-status">Normal</span>
+                </div>
+
+                <div class="sensor-card">
+                    <div class="sensor-name">Soil Moisture</div>
+                    <div class="sensor-value" id="current-soil">--</div>
+                    <div class="sensor-unit">%</div>
+                    <span class="sensor-status status-normal" id="soil-status">Normal</span>
+                </div>
+
+                <div class="sensor-card">
+                    <div class="sensor-name">Light Intensity</div>
+                    <div class="sensor-value" id="current-light">--</div>
+                    <div class="sensor-unit">lux</div>
+                    <span class="sensor-status status-normal" id="light-status">Normal</span>
+                </div>
+
+                <div class="sensor-card">
+                    <div class="sensor-name">Soil pH</div>
+                    <div class="sensor-value" id="current-ph">--</div>
+                    <div class="sensor-unit">pH</div>
+                    <span class="sensor-status status-normal" id="ph-status">Normal</span>
+                </div>
+
+                <div class="sensor-card">
+                    <div class="sensor-name">Wind Speed</div>
+                    <div class="sensor-value" id="current-wind">--</div>
+                    <div class="sensor-unit">m/s</div>
+                    <span class="sensor-status status-normal" id="wind-status">Normal</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Irrigation Control Panel -->
+        <div class="irrigation-control">
+            <div class="panel-header">
+                <div class="panel-title">
+                    💦 Irrigation Control
+                </div>
+                <div class="panel-actions">
+                    <button class="btn btn-primary" onclick="triggerIrrigation(5)">Quick 5min</button>
+                    <button class="btn btn-primary" onclick="triggerIrrigation(10)">10 Minutes</button>
+                    <button class="btn btn-primary" onclick="triggerIrrigation(20)">20 Minutes</button>
+                </div>
+            </div>
+
+            <div class="control-grid">
+                <div class="control-card">
+                    <div class="control-value" id="irrigation-count">0</div>
+                    <div class="control-label">Irrigations (24h)</div>
+                </div>
+                <div class="control-card">
+                    <div class="control-value" id="last-irrigation">--</div>
+                    <div class="control-label">Last Irrigation</div>
+                </div>
+                <div class="control-card">
+                    <div class="control-value" id="water-saved">--</div>
+                    <div class="control-label">Est. Water Saved</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Dashboard Grid -->
+        <div class="dashboard-grid">
+            <!-- Charts Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        📈 Historical Trends
+                    </div>
+                    <div class="panel-actions">
+                        <button class="btn btn-outline" onclick="updateChart(6)">6H</button>
+                        <button class="btn btn-outline" onclick="updateChart(24)">24H</button>
+                        <button class="btn btn-outline" onclick="updateChart(168)">7D</button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="mainChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Alerts Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        🚨 System Alerts
+                    </div>
+                    <div class="panel-actions">
+                        <button class="btn btn-outline" onclick="loadAlerts()">Refresh</button>
+                    </div>
+                </div>
+                <div class="alerts-list" id="alerts-container">
+                    <div style="text-align: center; padding: 2rem; color: var(--text-light);">
+                        Loading alerts...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>FarmGuard-AIoT | Research Methodology in Computing (BCT 2315 / BCT 2402)</p>
+        <p style="margin-top: 0.5rem; font-size: 0.8rem;">
+            Department of Computing | Smart Agriculture IoT System
+        </p>
+    </footer>
+
+    <script>
+        // Initialize Socket.IO connection
+        const socket = io();
+        let mainChart = null;
+
+        // Connection status handling
+        socket.on('connect', function() {
+            document.getElementById('connection-status').textContent = 'Live Connection';
+            document.querySelector('.status-dot').style.background = '#2ecc71';
+        });
+
+        socket.on('disconnect', function() {
+            document.getElementById('connection-status').textContent = 'Reconnecting...';
+            document.querySelector('.status-dot').style.background = '#e74c3c';
+        });
+
+        // Handle real-time sensor updates
+        socket.on('sensor_update', function(data) {
+            updateSensorDisplay(data.reading);
+            if (data.alerts && data.alerts.length > 0) {
+                loadAlerts();
+            }
+        });
+
+        // Handle irrigation events
+        socket.on('irrigation_event', function(data) {
+            showNotification(`Irrigation ${data.status}: ${data.duration} minutes`);
+            loadStatistics();
+        });
+
+        // Update sensor display
+        function updateSensorDisplay(reading) {
+            document.getElementById('current-temp').textContent = reading.temperature.toFixed(1);
+            document.getElementById('current-humidity').textContent = reading.humidity.toFixed(1);
+            document.getElementById('current-soil').textContent = reading.soil_moisture.toFixed(1);
+            document.getElementById('current-light').textContent = reading.light_intensity.toFixed(0);
+            document.getElementById('current-ph').textContent = reading.soil_ph.toFixed(2);
+            document.getElementById('current-wind').textContent = reading.wind_speed.toFixed(1);
+
+            // Update status indicators
+            updateStatusIndicator('temp', reading.temperature, 20, 35);
+            updateStatusIndicator('humidity', reading.humidity, 40, 90);
+            updateStatusIndicator('soil', reading.soil_moisture, 30, 80);
+            updateStatusIndicator('light', reading.light_intensity, 200, 1200);
+            updateStatusIndicator('ph', reading.soil_ph, 5.5, 7.5);
+            updateStatusIndicator('wind', reading.wind_speed, 0, 15);
+
+            document.getElementById('last-update').textContent = 
+                'Last update: ' + new Date().toLocaleTimeString();
+        }
+
+        function updateStatusIndicator(sensor, value, min, max) {
+            const statusEl = document.getElementById(sensor + '-status');
+            if (value < min || value > max) {
+                statusEl.textContent = 'Alert';
+                statusEl.className = 'sensor-status status-critical';
+            } else if (value < min + (max-min)*0.2 || value > max - (max-min)*0.2) {
+                statusEl.textContent = 'Caution';
+                statusEl.className = 'sensor-status status-warning';
+            } else {
+                statusEl.textContent = 'Normal';
+                statusEl.className = 'sensor-status status-normal';
+            }
+        }
+
+        // Load statistics
+        async function loadStatistics() {
+            try {
+                const response = await fetch('/api/statistics');
+                const stats = await response.json();
+
+                document.getElementById('avg-temp').textContent = stats.avg_temp ? stats.avg_temp.toFixed(1) : '--';
+                document.getElementById('avg-humidity').textContent = stats.avg_humidity ? stats.avg_humidity.toFixed(1) : '--';
+                document.getElementById('avg-soil').textContent = stats.avg_soil_moisture ? stats.avg_soil_moisture.toFixed(1) : '--';
+                document.getElementById('alert-count').textContent = stats.alert_count || '0';
+                document.getElementById('irrigation-count').textContent = stats.irrigation_count || '0';
+            } catch (error) {
+                console.error('Error loading statistics:', error);
+            }
+        }
+
+        // Load alerts
+        async function loadAlerts() {
+            try {
+                const response = await fetch('/api/alerts');
+                const alerts = await response.json();
+
+                const container = document.getElementById('alerts-container');
+                if (alerts.length === 0) {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 2rem; color: var(--text-light);">
+                            ✅ No active alerts
+                        </div>
+                    `;
+                    return;
+                }
+
+                container.innerHTML = alerts.map(alert => `
+                    <div class="alert-item ${alert.severity}">
+                        <div class="alert-icon">
+                            ${alert.severity === 'critical' ? '🔴' : alert.severity === 'warning' ? '🟡' : '🔵'}
+                        </div>
+                        <div class="alert-content">
+                            <div class="alert-title">${alert.alert_type.replace(/_/g, ' ').toUpperCase()}</div>
+                            <div class="alert-message">${alert.message}</div>
+                            <div class="alert-time">${new Date(alert.timestamp).toLocaleString()}</div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading alerts:', error);
+            }
+        }
+
+        // Trigger irrigation
+        async function triggerIrrigation(duration) {
+            try {
+                const response = await fetch('/api/irrigation/trigger', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ trigger_type: 'manual', duration_minutes: duration })
+                });
+                const result = await response.json();
+                showNotification(result.message);
+            } catch (error) {
+                console.error('Error triggering irrigation:', error);
+                showNotification('Failed to trigger irrigation', 'error');
+            }
+        }
+
+        // Show notification
+        function showNotification(message, type = 'success') {
+            const div = document.createElement('div');
+            div.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: ${type === 'error' ? '#e76f51' : '#2d6a4f'};
+                color: white;
+                padding: 1rem 1.5rem;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                z-index: 1000;
+                animation: slideIn 0.3s ease;
+            `;
+            div.textContent = message;
+            document.body.appendChild(div);
+
+            setTimeout(() => {
+                div.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => div.remove(), 300);
+            }, 3000);
+        }
+
+        // Initialize chart
+        async function initChart() {
+            const ctx = document.getElementById('mainChart').getContext('2d');
+
+            mainChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Temperature (°C)',
+                            data: [],
+                            borderColor: '#e76f51',
+                            backgroundColor: 'rgba(231, 111, 81, 0.1)',
+                            tension: 0.4,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Soil Moisture (%)',
+                            data: [],
+                            borderColor: '#2d6a4f',
+                            backgroundColor: 'rgba(45, 106, 79, 0.1)',
+                            tension: 0.4,
+                            yAxisID: 'y1'
+                        },
+                        {
+                            label: 'Humidity (%)',
+                            data: [],
+                            borderColor: '#457b9d',
+                            backgroundColor: 'rgba(69, 123, 157, 0.1)',
+                            tension: 0.4,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        x: {
+                            display: true,
+                            title: { display: true, text: 'Time' }
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: { display: true, text: 'Temperature (°C)' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: { display: true, text: 'Percentage (%)' },
+                            grid: { drawOnChartArea: false }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        }
+                    }
+                }
+            });
+
+            await updateChart(24);
+        }
+
+        // Update chart with historical data
+        async function updateChart(hours) {
+            try {
+                const response = await fetch(`/api/historical-data?hours=${hours}`);
+                const data = await response.json();
+
+                if (data.length === 0) return;
+
+                const labels = data.map(d => new Date(d.timestamp).toLocaleTimeString());
+                const temperatures = data.map(d => d.temperature);
+                const soilMoistures = data.map(d => d.soil_moisture);
+                const humidities = data.map(d => d.humidity);
+
+                mainChart.data.labels = labels;
+                mainChart.data.datasets[0].data = temperatures;
+                mainChart.data.datasets[1].data = soilMoistures;
+                mainChart.data.datasets[2].data = humidities;
+                mainChart.update();
+            } catch (error) {
+                console.error('Error updating chart:', error);
+            }
+        }
+
+        // Add CSS animations
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes slideOut {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStatistics();
+            loadAlerts();
+            initChart();
+
+            // Refresh data periodically
+            setInterval(loadStatistics, 30000);
+            setInterval(loadAlerts, 30000);
+            setInterval(() => updateChart(24), 60000);
+        });
+    </script>
+</body>
+</html>
